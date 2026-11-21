@@ -8,7 +8,7 @@ jobs:
     steps:
       - name: Which version is live
         run: |
-          curl -s -m 30 https://unifiedtik.com/ -o page.html; echo "size $(wc -c < page.html)"
+          curl -sS -m 30 https://unifiedtik.com/ -o page.html || true; echo "size $(wc -c < page.html)"
           for m in retryNet hv-bar a-keep "i18n.js?v=22"; do printf '%s: ' "$m"; grep -c "$m" page.html || true; done
       - name: Probe unifiedtik.com for 3 minutes
         run: |
