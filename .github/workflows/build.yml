@@ -16,8 +16,8 @@ jobs:
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -30,6 +30,11 @@ jobs:
           flutter create --org com --project-name unifiedtik --platforms android .
           rm -rf test
       - run: flutter pub get
+      - name: Patch plugins for the current Android build tools
+        run: |
+          # flutter_inappwebview_android 1.1.x still asks for proguard-android.txt, which new Android Gradle refuses
+          for f in $HOME/.pub-cache/hosted/pub.dev/flutter_inappwebview_android-*/android/build.gradle; do
+            sed -i "s/proguard-android.txt/proguard-android-optimize.txt/" "$f"; done
       - run: dart run flutter_launcher_icons
       - name: Check the code
         run: |
@@ -55,7 +60,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -67,6 +72,9 @@ jobs:
           rm -rf test
           sed -i 's/L"unifiedtik"/L"UnifiedTik"/' windows/runner/main.cpp
           sed -i 's/"FileDescription", "unifiedtik"/"FileDescription", "UnifiedTik"/; s/"ProductName", "unifiedtik"/"ProductName", "UnifiedTik"/' windows/runner/Runner.rc
+          # flutter_inappwebview_windows still uses the old /await coroutines, which Visual Studio 2026 refuses by default
+          sed -i '/^project(/a add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)' windows/CMakeLists.txt
+          grep -n "SILENCE" windows/CMakeLists.txt
       - run: flutter pub get
       - run: dart run flutter_launcher_icons
       - name: Build
