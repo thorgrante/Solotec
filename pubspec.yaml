@@ -1,5 +1,5 @@
-name: unifiedtik
-description: UnifiedTik hotspot voucher app for Android and Windows. Finds and connects routers on the local network.
+name: solotik
+description: Solotik hotspot voucher app for Android and Windows. Finds and connects routers on the local network.
 publish_to: none
 version: 1.0.0+1
 

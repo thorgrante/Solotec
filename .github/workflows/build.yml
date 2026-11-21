@@ -27,7 +27,7 @@ jobs:
           cache: true
       - name: Platform files
         run: |
-          flutter create --org com --project-name unifiedtik --platforms android .
+          flutter create --org com --project-name solotik --platforms android .
           rm -rf test
       - run: flutter pub get
       - name: Patch plugins for the current Android build tools
@@ -51,11 +51,11 @@ jobs:
         if: failure()
         run: |
           grep -E 'Error:|error:|What went wrong|FAILURE|Exception' build.txt 2>/dev/null | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done || true
-      - run: cp build/app/outputs/flutter-apk/app-release.apk UnifiedTik.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk Solotik.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: UnifiedTik.apk
+          path: Solotik.apk
 
   windows:
     runs-on: windows-latest
@@ -68,10 +68,10 @@ jobs:
       - name: Platform files
         shell: bash
         run: |
-          flutter create --org com --project-name unifiedtik --platforms windows .
+          flutter create --org com --project-name solotik --platforms windows .
           rm -rf test
-          sed -i 's/L"unifiedtik"/L"UnifiedTik"/' windows/runner/main.cpp
-          sed -i 's/"FileDescription", "unifiedtik"/"FileDescription", "UnifiedTik"/; s/"ProductName", "unifiedtik"/"ProductName", "UnifiedTik"/' windows/runner/Runner.rc
+          sed -i 's/L"solotik"/L"Solotik"/' windows/runner/main.cpp
+          sed -i 's/"FileDescription", "solotik"/"FileDescription", "Solotik"/; s/"ProductName", "solotik"/"ProductName", "Solotik"/' windows/runner/Runner.rc
           # flutter_inappwebview_windows still uses the old /await coroutines, which Visual Studio 2026 refuses by default
           sed -i '/^project(/a add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)' windows/CMakeLists.txt
           grep -n "SILENCE" windows/CMakeLists.txt
@@ -89,20 +89,20 @@ jobs:
           grep -E 'error|Error|FAILED' build.txt 2>/dev/null | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done || true
       - name: Zip
         shell: pwsh
-        run: Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath UnifiedTik-Windows.zip
+        run: Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath Solotik-Windows.zip
       - name: Installer
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc /DSrc="$pwd\build\windows\x64\runner\Release" /DIcon="$pwd\windows\runner\resources\app_icon.ico" windows-installer\unifiedtik.iss
-          Copy-Item windows-installer\Output\UnifiedTik-Setup.exe .
+          & $iscc /DSrc="$pwd\build\windows\x64\runner\Release" /DIcon="$pwd\windows\runner\resources\app_icon.ico" windows-installer\solotik.iss
+          Copy-Item windows-installer\Output\Solotik-Setup.exe .
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
-            UnifiedTik-Setup.exe
-            UnifiedTik-Windows.zip
+            Solotik-Setup.exe
+            Solotik-Windows.zip
 
   release:
     needs: [android, windows]
@@ -112,15 +112,21 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      - name: Old file names too (links on websites not yet updated)
+        run: |
+          cp out/Solotik.apk out/UnifiedTik.apk
+          cp out/Solotik-Setup.exe out/UnifiedTik-Setup.exe
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: UnifiedTik 1.0.${{ github.run_number }}
+          name: Solotik 1.0.${{ github.run_number }}
           make_latest: true
           body: |
-            Android: UnifiedTik.apk (install directly on the phone).
-            Windows: UnifiedTik-Setup.exe (installer) or UnifiedTik-Windows.zip (unzip and run unifiedtik.exe).
+            Android: Solotik.apk (install directly on the phone).
+            Windows: Solotik-Setup.exe (installer) or Solotik-Windows.zip (unzip and run solotik.exe).
           files: |
+            out/Solotik.apk
+            out/Solotik-Setup.exe
+            out/Solotik-Windows.zip
             out/UnifiedTik.apk
             out/UnifiedTik-Setup.exe
-            out/UnifiedTik-Windows.zip

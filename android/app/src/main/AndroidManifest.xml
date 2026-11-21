@@ -6,7 +6,7 @@
     <!-- usesCleartextTraffic: only for reading the web page of devices on the shop network (http://192.168.x.x).
          The server itself is always reached over HTTPS. -->
     <application
-        android:label="UnifiedTik"
+        android:label="Solotik"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

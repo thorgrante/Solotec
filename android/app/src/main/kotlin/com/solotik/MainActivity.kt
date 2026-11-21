@@ -1,4 +1,4 @@
-package com.unifiedtik
+package com.solotik
 
 import android.content.Context
 import android.net.wifi.WifiManager
