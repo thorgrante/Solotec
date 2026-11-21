@@ -1,0 +1,118 @@
+name: Build apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Platform files
+        run: |
+          flutter create --org com --project-name unifiedtik --platforms android .
+          rm -rf test
+      - run: flutter pub get
+      - run: dart run flutter_launcher_icons
+      - name: Check the code
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos --no-fatal-warnings > analyze.txt 2>&1; code=$?
+          cat analyze.txt
+          grep -E '^\s*error •' analyze.txt | head -40 | sed -E 's/^\s*error • (.*) • ([^ ]+):([0-9]+):([0-9]+) • .*/::error file=\2,line=\3,col=\4::\1/'
+          exit $code
+      - name: Build APK
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee build.txt
+      - name: Report build errors
+        if: failure()
+        run: |
+          grep -E 'Error:|error:|What went wrong|FAILURE|Exception' build.txt 2>/dev/null | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done || true
+      - run: cp build/app/outputs/flutter-apk/app-release.apk UnifiedTik.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: UnifiedTik.apk
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Platform files
+        shell: bash
+        run: |
+          flutter create --org com --project-name unifiedtik --platforms windows .
+          rm -rf test
+          sed -i 's/L"unifiedtik"/L"UnifiedTik"/' windows/runner/main.cpp
+          sed -i 's/"FileDescription", "unifiedtik"/"FileDescription", "UnifiedTik"/; s/"ProductName", "unifiedtik"/"ProductName", "UnifiedTik"/' windows/runner/Runner.rc
+      - run: flutter pub get
+      - run: dart run flutter_launcher_icons
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build windows --release 2>&1 | tee build.txt
+      - name: Report build errors
+        if: failure()
+        shell: bash
+        run: |
+          grep -E 'error|Error|FAILED' build.txt 2>/dev/null | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done || true
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath UnifiedTik-Windows.zip
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /DSrc="$pwd\build\windows\x64\runner\Release" /DIcon="$pwd\windows\runner\resources\app_icon.ico" windows-installer\unifiedtik.iss
+          Copy-Item windows-installer\Output\UnifiedTik-Setup.exe .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            UnifiedTik-Setup.exe
+            UnifiedTik-Windows.zip
+
+  release:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: UnifiedTik 1.0.${{ github.run_number }}
+          make_latest: true
+          body: |
+            Android: UnifiedTik.apk (install directly on the phone).
+            Windows: UnifiedTik-Setup.exe (installer) or UnifiedTik-Windows.zip (unzip and run unifiedtik.exe).
+          files: |
+            out/UnifiedTik.apk
+            out/UnifiedTik-Setup.exe
+            out/UnifiedTik-Windows.zip
