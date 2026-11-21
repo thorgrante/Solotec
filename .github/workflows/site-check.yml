@@ -6,9 +6,13 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      - name: Which version is live
+        run: |
+          curl -s -m 30 https://unifiedtik.com/ -o page.html; echo "size $(wc -c < page.html)"
+          for m in retryNet hv-bar a-keep "i18n.js?v=22"; do printf '%s: ' "$m"; grep -c "$m" page.html || true; done
       - name: Probe unifiedtik.com for 3 minutes
         run: |
-          for i in $(seq 1 36); do
+          for i in $(seq 1 3); do
             for u in /api/health /api/portal/plans / ; do
               r=$(curl -s -o /tmp/b -w "%{http_code} %{time_total}s" -m 20 "https://unifiedtik.com$u" 2>&1 || echo "ERR $?")
               echo "$(date -u +%H:%M:%S) $u $r $(head -c 120 /tmp/b 2>/dev/null | tr '\n' ' ' | grep -o '^.\{0,120\}' | grep -v '<!doctype' )"
