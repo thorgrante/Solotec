@@ -1,6 +1,7 @@
 // The website, full screen, with the app's extras (router finding, saving files). Links to other sites open in the
 // browser. When the website cannot be reached, a plain screen says so, with Try again and the server address.
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,7 +20,36 @@ class WebShell extends StatefulWidget {
   State<WebShell> createState() => _WebShellState();
 }
 
-class _WebShellState extends State<WebShell> {
+class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Back from another app: Android may have paused the page's timers and network while it was in the background.
+  // Wake the page up and let it check the connection again at once (instead of waiting for its next timer).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final c = _c;
+    if (c == null || state != AppLifecycleState.resumed) return;
+    () async {
+      try {
+        if (Platform.isAndroid) {
+          await c.resume();
+          await c.resumeTimers();
+        }
+        await c.evaluateJavascript(source: "window.dispatchEvent(new Event('online'))");
+      } catch (_) {}
+    }();
+  }
+
   InAppWebViewController? _c;
   late String _server = _origin(widget.server);
   bool _failed = false;
