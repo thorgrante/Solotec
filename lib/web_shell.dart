@@ -54,6 +54,7 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
   late String _server = _origin(widget.server);
   bool _failed = false;
   double _progress = 0;
+  bool _shown = false; // the first page has appeared
 
   static String _origin(String s) {
     var u = s.trim();
@@ -162,12 +163,16 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
                 final u = req.url;
                 if (u.scheme == 'http' || u.scheme == 'https') await _external(u);
               },
-              onProgressChanged: (c, p) => setState(() => _progress = p / 100),
+              onProgressChanged: (c, p) => setState(() {
+                _progress = p / 100;
+                if (p >= 100) _shown = true;
+              }),
               onReceivedError: (c, req, err) {
                 if (req.isForMainFrame ?? true) setState(() => _failed = true);
               },
             ),
-            if (_progress < 1 && !_failed) LinearProgressIndicator(value: _progress == 0 ? null : _progress, minHeight: 3),
+            // loading: a turning circular arrow. Over a plain screen while the app opens, over the page after that.
+            if (_progress < 1 && !_failed) Positioned.fill(child: _Loading(cover: !_shown)),
             if (_failed) _Offline(onRetry: _retry, onServer: _changeServer, server: _server),
           ]),
         ),
@@ -204,6 +209,43 @@ class _Offline extends StatelessWidget {
               ]),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Loading extends StatefulWidget {
+  const _Loading({required this.cover});
+  final bool cover;
+  @override
+  State<_Loading> createState() => _LoadingState();
+}
+
+class _LoadingState extends State<_Loading> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final arrow = RotationTransition(turns: _a, child: Icon(Icons.refresh_rounded, size: 44, color: t.colorScheme.primary, semanticLabel: 'Loading'));
+    return IgnorePointer(
+      ignoring: !widget.cover,
+      child: ColoredBox(
+        color: widget.cover ? t.colorScheme.surface : Colors.transparent,
+        child: Center(
+          child: widget.cover
+              ? arrow
+              : DecoratedBox(
+                  decoration: BoxDecoration(color: t.colorScheme.surface, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 16, offset: Offset(0, 4))]),
+                  child: Padding(padding: const EdgeInsets.all(14), child: arrow),
+                ),
         ),
       ),
     );
