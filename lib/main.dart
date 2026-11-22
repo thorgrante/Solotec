@@ -14,6 +14,7 @@ const native = MethodChannel('hv/native');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); // the app fills the whole screen
   final p = await SharedPreferences.getInstance();
   var install = p.getString('hv.install');
   if (install == null || install.isEmpty) {

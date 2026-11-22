@@ -23,6 +23,24 @@ class WebShell extends StatefulWidget {
 }
 
 class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
+  Color? _top, _bottom; // the page's colours at the very top and bottom of the screen
+
+  static Color? _css(Object? v) {
+    final m = RegExp(r'rgba?\((\d+),\s*(\d+),\s*(\d+)').firstMatch('$v');
+    if (m == null) return null;
+    return Color.fromARGB(255, int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
+  }
+
+  // Tells the app which colours the page shows at the top and the bottom edge (solid colours only).
+  static const _barsScript = r'''
+(function(){if(window.__hvBars)return;window.__hvBars=1;var last='';
+function solid(c){var m=/rgba\(([^)]+)\)/.exec(c);return c&&c!=='transparent'&&(!m||parseFloat(m[1].split(',')[3])>=1)}
+function col(el){while(el&&el.nodeType===1){var c=getComputedStyle(el).backgroundColor;if(solid(c))return c;el=el.parentElement}
+ var b=getComputedStyle(document.body).backgroundColor;return solid(b)?b:getComputedStyle(document.documentElement).backgroundColor}
+function send(){try{var w=innerWidth,h=innerHeight,t=col(document.elementFromPoint(w/2,1)),b=col(document.elementFromPoint(w/2,h-2)),k=t+'|'+b;
+ if(k!==last&&window.flutter_inappwebview&&window.flutter_inappwebview.callHandler){last=k;window.flutter_inappwebview.callHandler('bars',t,b)}}catch(e){}}
+setInterval(send,300);addEventListener('scroll',send,{passive:true});send()})();
+''';
   @override
   void initState() {
     super.initState();
@@ -174,13 +192,36 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
           await SystemNavigator.pop();
         }
       },
-      child: Scaffold(
-        body: SafeArea(
+      child: Builder(builder: (context) {
+        // Full screen: the page reaches the phone's status bar and bottom bar, and both take the colour of the page
+        // under them (purple behind the header, the page colour at the bottom), so no empty bars show.
+        final surface = Theme.of(context).colorScheme.surface;
+        final cover = _failed || !_shown;
+        final top = cover ? surface : (_top ?? surface), bottom = cover ? surface : (_bottom ?? surface);
+        Brightness icons(Color c) => c.computeLuminance() > .5 ? Brightness.dark : Brightness.light;
+        final pad = MediaQuery.paddingOf(context);
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: icons(top),
+            statusBarBrightness: icons(top) == Brightness.dark ? Brightness.light : Brightness.dark,
+            systemNavigationBarColor: bottom,
+            systemNavigationBarDividerColor: bottom,
+            systemNavigationBarIconBrightness: icons(bottom),
+            systemNavigationBarContrastEnforced: false,
+          ),
+          child: Scaffold(
+        backgroundColor: bottom,
+        body: Column(children: [
+          Container(height: pad.top, color: top),
+          Expanded(child: SafeArea(
+          top: false,
           child: Stack(children: [
             InAppWebView(
               initialUrlRequest: URLRequest(url: WebUri('$_server/')),
               initialUserScripts: UnmodifiableListView<UserScript>([
                 UserScript(source: widget.bridge.script(), injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START),
+                UserScript(source: _barsScript, injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END),
               ]),
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
@@ -195,6 +236,14 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
               onWebViewCreated: (c) {
                 _c = c;
                 c.addJavaScriptHandler(handlerName: 'hv', callback: (args) => widget.bridge.handle(args, _server));
+                c.addJavaScriptHandler(handlerName: 'bars', callback: (args) {
+                  final t = args.isNotEmpty ? _css(args[0]) : null, b = args.length > 1 ? _css(args[1]) : null;
+                  if (mounted && (t != _top || b != _bottom)) setState(() {
+                    _top = t;
+                    _bottom = b;
+                  });
+                  return null;
+                });
               },
               shouldOverrideUrlLoading: (c, action) async {
                 final u = action.request.url;
@@ -264,8 +313,11 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
               ),
             ),
           ]),
-        ),
-      ),
+        )),
+        ]),
+          ),
+        );
+      }),
     );
   }
 }
