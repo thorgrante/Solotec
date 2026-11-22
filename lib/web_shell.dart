@@ -1,5 +1,7 @@
 // The website, full screen, with the app's extras (router finding, saving files). Links to other sites open in the
-// browser. When the website cannot be reached, a plain screen says so, with Try again and the server address.
+// browser. Without internet a plain screen says so; Try again checks first and, while there is still no internet, only
+// shows "No internet connection" at the top. The phone's own "Web page not available" page is never shown.
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
@@ -76,9 +78,65 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  void _retry() {
-    setState(() => _failed = false);
-    _c?.loadUrl(urlRequest: URLRequest(url: WebUri('$_server/')));
+  bool _checking = false;
+  String? _toast;
+  Timer? _toastT, _auto;
+
+  /// Can this device reach the website right now?
+  Future<bool> _reachable() async {
+    final h = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+    try {
+      final r = await (await h.getUrl(Uri.parse('$_server/api/health'))).close().timeout(const Duration(seconds: 8));
+      await r.drain<void>();
+      return r.statusCode < 500;
+    } catch (_) {
+      return false;
+    } finally {
+      h.close(force: true);
+    }
+  }
+
+  void _say(String t) {
+    _toastT?.cancel();
+    setState(() => _toast = t);
+    _toastT = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _toast = null);
+    });
+  }
+
+  void _offline() {
+    if (!_failed) setState(() => _failed = true);
+    // check quietly every few seconds, and carry on by itself when the internet is back
+    _auto ??= Timer.periodic(const Duration(seconds: 6), (_) async {
+      if (!_failed || _checking) return;
+      if (await _reachable()) _retry(quiet: true);
+    });
+  }
+
+  Future<void> _retry({bool quiet = false}) async {
+    if (_checking) return;
+    setState(() => _checking = true);
+    final ok = await _reachable();
+    if (!mounted) return;
+    setState(() => _checking = false);
+    if (!ok) {
+      if (!quiet) _say('No internet connection');
+      return;
+    }
+    _auto?.cancel();
+    _auto = null;
+    setState(() {
+      _failed = false;
+      _progress = 0;
+    });
+    await _c?.loadUrl(urlRequest: URLRequest(url: WebUri('$_server/')));
+  }
+
+  @override
+  void deactivate() {
+    _toastT?.cancel();
+    _auto?.cancel();
+    super.deactivate();
   }
 
   Future<void> _changeServer() async {
@@ -168,12 +226,43 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
                 if (p >= 100) _shown = true;
               }),
               onReceivedError: (c, req, err) {
-                if (req.isForMainFrame == true) setState(() => _failed = true);
+                if (req.isForMainFrame == true) _offline();
+              },
+              onLoadStop: (c, url) async {
+                // the phone's own error page ("Web page not available") is never left on screen
+                final u = url?.toString() ?? '';
+                if (u.startsWith('chrome-error:') || u.startsWith('about:neterror') || (u == 'about:blank' && _failed)) _offline();
               },
             ),
             // loading: a turning circular arrow. Over a plain screen while the app opens, over the page after that.
             if (_progress < 1 && !_failed) Positioned.fill(child: _Loading(cover: !_shown)),
-            if (_failed) _Offline(onRetry: _retry, onServer: _changeServer, server: _server),
+            if (_failed) _Offline(onRetry: () => _retry(), onServer: _changeServer, checking: _checking),
+            // "No internet connection" at the top, the way other apps say it
+            Positioned(
+              top: 12,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: AnimatedSlide(
+                  offset: _toast == null ? const Offset(0, -2) : Offset.zero,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                  child: AnimatedOpacity(
+                    opacity: _toast == null ? 0 : 1,
+                    duration: const Duration(milliseconds: 200),
+                    child: Center(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(color: const Color(0xFFE5484D), borderRadius: BorderRadius.circular(999), boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 14, offset: Offset(0, 4))]),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                          child: Text(_toast ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ]),
         ),
       ),
@@ -182,9 +271,9 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
 }
 
 class _Offline extends StatelessWidget {
-  const _Offline({required this.onRetry, required this.onServer, required this.server});
+  const _Offline({required this.onRetry, required this.onServer, required this.checking});
   final VoidCallback onRetry, onServer;
-  final String server;
+  final bool checking;
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
@@ -197,15 +286,19 @@ class _Offline extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.wifi_off_rounded, size: 56, color: t.colorScheme.primary),
+                // a long press on the icon opens the server address (for support only; not shown to customers)
+                GestureDetector(onLongPress: onServer, child: Icon(Icons.wifi_off_rounded, size: 56, color: t.colorScheme.primary)),
                 const SizedBox(height: 16),
-                Text('Can’t reach the server', style: t.textTheme.titleLarge, textAlign: TextAlign.center),
+                Text('Can’t access the internet', style: t.textTheme.titleLarge, textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                Text('Check your internet connection, then try again.', style: t.textTheme.bodyMedium, textAlign: TextAlign.center),
+                Text('Check your internet connection.', style: t.textTheme.bodyMedium, textAlign: TextAlign.center),
                 const SizedBox(height: 24),
-                FilledButton(onPressed: onRetry, child: const Text('Try again')),
-                const SizedBox(height: 8),
-                TextButton(onPressed: onServer, child: Text('Server: ${Uri.parse(server).host}')),
+                FilledButton(
+                  onPressed: checking ? null : onRetry,
+                  child: checking
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))
+                      : const Text('Try again'),
+                ),
               ]),
             ),
           ),
