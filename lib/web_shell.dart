@@ -168,7 +168,7 @@ class _WebShellState extends State<WebShell> with WidgetsBindingObserver {
                 if (p >= 100) _shown = true;
               }),
               onReceivedError: (c, req, err) {
-                if (req.isForMainFrame ?? true) setState(() => _failed = true);
+                if (req.isForMainFrame == true) setState(() => _failed = true);
               },
             ),
             // loading: a turning circular arrow. Over a plain screen while the app opens, over the page after that.
@@ -222,32 +222,70 @@ class _Loading extends StatefulWidget {
   State<_Loading> createState() => _LoadingState();
 }
 
-class _LoadingState extends State<_Loading> with SingleTickerProviderStateMixin {
-  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+/// The Solotik logo inside a turning gradient ring. Full screen while the app opens; a floating badge over the page
+/// while a page reloads (after signing in, for example).
+class _LoadingState extends State<_Loading> with TickerProviderStateMixin {
+  late final AnimationController _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 850))..repeat();
+  late final AnimationController _breathe = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat(reverse: true);
 
   @override
   void dispose() {
-    _a.dispose();
+    _spin.dispose();
+    _breathe.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final arrow = RotationTransition(turns: _a, child: Icon(Icons.refresh_rounded, size: 44, color: t.colorScheme.primary, semanticLabel: 'Loading'));
+    final size = widget.cover ? 104.0 : 76.0, logo = widget.cover ? 68.0 : 48.0;
+    final mark = SizedBox(
+      width: size,
+      height: size,
+      child: Stack(alignment: Alignment.center, children: [
+        RotationTransition(turns: _spin, child: CustomPaint(size: Size.square(size), painter: _Ring(widget.cover ? 7 : 5))),
+        ScaleTransition(
+          scale: Tween(begin: .92, end: 1.0).animate(CurvedAnimation(parent: _breathe, curve: Curves.easeInOut)),
+          child: Container(
+            width: logo,
+            height: logo,
+            decoration: const BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: Color(0x474A00A0), blurRadius: 22, offset: Offset(0, 8))]),
+            child: ClipOval(child: Image.asset('assets/icon.png', fit: BoxFit.cover, semanticLabel: 'Loading')),
+          ),
+        ),
+      ]),
+    );
     return IgnorePointer(
       ignoring: !widget.cover,
       child: ColoredBox(
         color: widget.cover ? t.colorScheme.surface : Colors.transparent,
         child: Center(
           child: widget.cover
-              ? arrow
+              ? mark
               : DecoratedBox(
-                  decoration: BoxDecoration(color: t.colorScheme.surface, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 16, offset: Offset(0, 4))]),
-                  child: Padding(padding: const EdgeInsets.all(14), child: arrow),
+                  decoration: BoxDecoration(color: t.colorScheme.surface.withValues(alpha: .96), shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 8))]),
+                  child: Padding(padding: const EdgeInsets.all(10), child: mark),
                 ),
         ),
       ),
     );
   }
+}
+
+class _Ring extends CustomPainter {
+  _Ring(this.width);
+  final double width;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = Offset.zero & size;
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width
+      ..strokeCap = StrokeCap.round
+      ..shader = const SweepGradient(colors: [Color(0x007F19FF), Color(0x337F19FF), Color(0xFFB07BFF), Color(0xFF7F19FF)], stops: [0, .25, .62, .92]).createShader(r);
+    canvas.drawArc(r.deflate(width / 2), 0.15, 6.0, false, p);
+  }
+
+  @override
+  bool shouldRepaint(_Ring old) => old.width != width;
 }
