@@ -30,6 +30,7 @@ Stable links to the newest version:
 | `lib/connector.dart` | The line to the website (`/api/portal/connector/poll`) and its jobs: scan, probe, open, run, close |
 | `lib/discovery.dart` | Finding devices: MNDP (UDP 5678), API/web port sweep of this device's /24 networks, web page, ARP (Windows) |
 | `lib/routeros.dart` | RouterOS API client (8728, 8729), including the pre-6.43 login |
+| `lib/lan.dart` | Connections to devices on the shop network, made on the Wi-Fi itself on Android (a hotspot Wi-Fi with no internet before login is otherwise skipped for mobile data) |
 | `android/app/src/main/...` | Permissions; MainActivity: device name and the Wi-Fi multicast lock for router announcements |
 | `windows-installer/solotik.iss` | Inno Setup script for the Windows installer |
 | `.github/workflows/build.yml` | Builds the APK and the Windows app and publishes a release |

@@ -8,6 +8,8 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+import 'lan.dart';
+
 class RouterReply {
   RouterReply(this.rows, this.done);
   final List<Map<String, String>> rows;
@@ -137,9 +139,9 @@ class RouterOS {
 
   Future<RouterOS> connect() async {
     try {
-      _sock = tls
-          ? await SecureSocket.connect(host, port, timeout: timeout, onBadCertificate: (_) => true)
-          : await Socket.connect(host, port, timeout: timeout);
+      // on the Wi-Fi when the router is on the shop network (see lan.dart)
+      final raw = await lanConnect(host, port, timeout);
+      _sock = tls ? await SecureSocket.secure(raw, host: host, onBadCertificate: (_) => true) : raw;
     } catch (e) {
       closed = true;
       throw friendly(e, host, port);

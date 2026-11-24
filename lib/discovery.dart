@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'lan.dart';
+
 bool privateIp(String ip) {
   final m = RegExp(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)$').firstMatch(ip);
   if (m == null) return false;
@@ -77,15 +79,7 @@ Future<List<LocalNet>> localNets() async {
   return out.take(4).toList();
 }
 
-Future<bool> tryPort(String host, int port, int ms) async {
-  try {
-    final s = await Socket.connect(host, port, timeout: Duration(milliseconds: ms));
-    s.destroy();
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
+Future<bool> tryPort(String host, int port, int ms) => lanProbe(host, port, ms);
 
 Future<void> _pool<T>(List<T> items, int n, Future<void> Function(T) fn, bool Function() stop) async {
   var i = 0;
@@ -103,7 +97,8 @@ Future<void> _pool<T>(List<T> items, int n, Future<void> Function(T) fn, bool Fu
 Future<Map<String, String>?> webPage(String ip, int port) async {
   final c = HttpClient()
     ..connectionTimeout = const Duration(milliseconds: 1800)
-    ..badCertificateCallback = (cert, host, p) => true;
+    ..badCertificateCallback = (cert, host, p) => true
+    ..connectionFactory = (uri, proxyHost, proxyPort) => lanHttp(uri, const Duration(milliseconds: 1800));
   try {
     final req = await c.getUrl(Uri(scheme: port == 443 ? 'https' : 'http', host: ip, port: port, path: '/')).timeout(const Duration(milliseconds: 1800));
     req.followRedirects = false;
