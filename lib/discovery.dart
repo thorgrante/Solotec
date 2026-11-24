@@ -97,8 +97,8 @@ Future<void> _pool<T>(List<T> items, int n, Future<void> Function(T) fn, bool Fu
 Future<Map<String, String>?> webPage(String ip, int port) async {
   final c = HttpClient()
     ..connectionTimeout = const Duration(milliseconds: 1800)
-    ..badCertificateCallback = (cert, host, p) => true
-    ..connectionFactory = (uri, proxyHost, proxyPort) => lanHttp(uri, const Duration(milliseconds: 1800));
+    ..badCertificateCallback = ((cert, host, p) => true)
+    ..connectionFactory = ((uri, proxyHost, proxyPort) => lanHttp(uri, const Duration(milliseconds: 1800)));
   try {
     final req = await c.getUrl(Uri(scheme: port == 443 ? 'https' : 'http', host: ip, port: port, path: '/')).timeout(const Duration(milliseconds: 1800));
     req.followRedirects = false;
