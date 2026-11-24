@@ -112,8 +112,9 @@ RouterError friendly(Object e, String host, int port) {
 }
 
 class _Cmd {
-  _Cmd(this.words);
+  _Cmd(this.words, [this.wait]);
   final List<String> words;
+  final Duration? wait;
   final Completer<RouterReply> done = Completer<RouterReply>();
   final List<Map<String, String>> rows = [];
   String? trap;
@@ -226,16 +227,17 @@ class RouterOS {
   void _next() {
     if (_cur != null || _queue.isEmpty || _sock == null) return;
     final c = _cur = _queue.removeFirst();
-    c.timer = Timer(timeout, () {
+    c.timer = Timer(c.wait ?? timeout, () {
       _failAll(RouterError('The router did not answer in time.'));
       close();
     });
     _sock!.add(encodeSentence(c.words));
   }
 
-  Future<RouterReply> run(List<String> words) {
+  /// [wait]: how long this one command may take (a command that waits on the router, such as a device-mode change).
+  Future<RouterReply> run(List<String> words, {Duration? wait}) {
     if (closed) return Future.error(RouterError('Not connected.'));
-    final c = _Cmd(words);
+    final c = _Cmd(words, wait);
     _queue.add(c);
     _next();
     return c.done.future;

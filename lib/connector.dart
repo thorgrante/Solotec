@@ -97,6 +97,7 @@ class _Session {
   _Session(this.c);
   final RouterOS c;
   DateTime used = DateTime.now();
+  int busy = 0; // commands still waiting on the router: the session is not idle
 }
 
 /// One line to the website for one branch.
@@ -150,7 +151,7 @@ class _Line {
     _idle = Timer.periodic(const Duration(seconds: 15), (_) {
       final now = DateTime.now();
       _sessions.removeWhere((k, s) {
-        final old = now.difference(s.used) > const Duration(minutes: 2);
+        final old = s.busy == 0 && now.difference(s.used) > const Duration(minutes: 2);
         if (old) s.c.close();
         return old;
       });
@@ -289,8 +290,15 @@ class _Line {
       s.used = DateTime.now();
       final words = j['words'];
       if (words is! List || words.any((w) => w is! String)) throw RouterError('Bad command.');
-      final r = await s.c.run(words.cast<String>());
-      return {'rows': r.rows, 'done': r.done};
+      final w = j['wait'] is int ? (j['wait'] as int).clamp(1000, 420000).toInt() : null;
+      s.busy++;
+      try {
+        final r = await s.c.run(words.cast<String>(), wait: w == null ? null : Duration(milliseconds: w));
+        return {'rows': r.rows, 'done': r.done};
+      } finally {
+        s.busy--;
+        s.used = DateTime.now();
+      }
     }
     throw RouterError('Unknown job.');
   }
