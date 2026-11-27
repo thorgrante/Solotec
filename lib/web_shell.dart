@@ -229,7 +229,7 @@ setInterval(send,300);addEventListener('scroll',send,{passive:true});send()})();
                 supportMultipleWindows: true,
                 useShouldOverrideUrlLoading: true,
                 useOnDownloadStart: true,
-                mediaPlaybackRequiresUserGesture: true,
+                mediaPlaybackRequiresUserGesture: false, // the Solotik tune plays with alerts
                 supportZoom: false,
                 applicationNameForUserAgent: '$appName/$appVersion',
               ),

@@ -1,7 +1,7 @@
 name: solotik
 description: Solotik hotspot voucher app for Android and Windows. Finds and connects routers on the local network.
 publish_to: none
-version: 1.0.7+8
+version: 1.0.8+9
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
