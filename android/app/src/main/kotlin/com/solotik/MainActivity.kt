@@ -112,10 +112,40 @@ class MainActivity : FlutterActivity() {
                         ui.post { result.success(ok) }
                     }
                 }
+                // Ticket alerts while the app is closed: {on, server, key}
+                "alerts" -> {
+                    val a = call.arguments as? Map<*, *>
+                    val on = a?.get("on") as? Boolean ?: false
+                    try {
+                        if (on) {
+                            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                                requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7)
+                            AlertService.start(applicationContext, a?.get("server") as? String ?: "", a?.get("key") as? String ?: "")
+                            askBattery()
+                        } else AlertService.stop(applicationContext)
+                        result.success(true)
+                    } catch (e: Exception) { result.error("alerts", e.message ?: e.javaClass.simpleName, null) }
+                }
                 else -> result.notImplemented()
             }
         }
     }
+
+    // Some phones stop background work to save battery: ask once to let the alert watcher run.
+    private fun askBattery() {
+        if (Build.VERSION.SDK_INT < 23) return
+        val p = getSharedPreferences(AlertService.PREFS, Context.MODE_PRIVATE)
+        if (p.getBoolean("askedBattery", false)) return
+        p.edit().putBoolean("askedBattery", true).apply()
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName))
+                startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:$packageName")))
+        } catch (_: Exception) {}
+    }
+
+    override fun onResume() { super.onResume(); AlertService.foreground = true }
+    override fun onPause() { AlertService.foreground = false; super.onPause() }
 
     override fun onDestroy() {
         try { lock?.release() } catch (_: Exception) {}

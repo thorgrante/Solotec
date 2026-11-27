@@ -4,10 +4,12 @@
 //   connector {branch,id,key} keep the key the website just made for this install (POST /api/connector/self)
 //   forget {branch}           drop it
 //   saveFile {name,mime,data} a file the page made (tickets PDF, CSV, ...), base64
+//   alerts {on,server,key}    Android: pop-up alerts with the tune while the app is closed
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -63,6 +65,10 @@ document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e
           return l == null ? {} : {'id': l.id};
         case 'forget':
           await connector.forget(server, branchOf());
+          return {'ok': true};
+        case 'alerts': // ticket alerts with the app closed (Android): {on, server, key}
+          if (!Platform.isAndroid) return {'ok': false};
+          await const MethodChannel('hv/native').invokeMethod('alerts', {'on': a['on'] == true, 'server': '${a['server'] ?? server}', 'key': '${a['key'] ?? ''}'});
           return {'ok': true};
         case 'saveFile':
           return await _saveFile('${a['name'] ?? 'download'}', '${a['mime'] ?? 'application/octet-stream'}', '${a['data'] ?? ''}');
