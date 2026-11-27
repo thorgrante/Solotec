@@ -92,6 +92,11 @@ document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e
     final dir = await getTemporaryDirectory();
     final f = File('${dir.path}${Platform.pathSeparator}$safe');
     await f.writeAsBytes(bytes, flush: true);
+    // Kept in Downloads/Solotik and opened in the phone's own viewer, in its own window; the share sheet when that is not possible.
+    try {
+      final opened = await const MethodChannel('hv/native').invokeMethod<bool>('saveOpen', {'path': f.path, 'name': safe, 'mime': mime});
+      if (opened == true) return {'saved': true, 'where': 'Downloads/Solotik'};
+    } catch (_) {}
     await Share.shareXFiles([XFile(f.path, mimeType: mime, name: safe)]);
     return {'saved': true};
   }

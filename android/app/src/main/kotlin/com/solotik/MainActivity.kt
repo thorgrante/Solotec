@@ -112,6 +112,32 @@ class MainActivity : FlutterActivity() {
                         ui.post { result.success(ok) }
                     }
                 }
+                // A file the page made (tickets PDF...): kept in Downloads and opened in its own app, in its own
+                // window (so closing the PDF never means closing Solotik). false: the app shares it instead.
+                "saveOpen" -> {
+                    val a = call.arguments as? Map<*, *>
+                    val path = a?.get("path") as? String ?: ""; val name = a?.get("name") as? String ?: "file"
+                    val mime = a?.get("mime") as? String ?: "application/octet-stream"
+                    if (Build.VERSION.SDK_INT < 29 || path.isEmpty()) { result.success(false); return@setMethodCallHandler }
+                    thread(isDaemon = true) {
+                        try {
+                            val v = android.content.ContentValues().apply {
+                                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Solotik")
+                            }
+                            val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, v) ?: throw Exception("no place to save")
+                            contentResolver.openOutputStream(uri)!!.use { o -> java.io.File(path).inputStream().use { it.copyTo(o) } }
+                            ui.post {
+                                try {
+                                    startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_MULTIPLE_TASK or android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                                    result.success(true)
+                                } catch (e: Exception) { result.success(false) }
+                            }
+                        } catch (e: Exception) { ui.post { result.success(false) } }
+                    }
+                }
                 // Ticket alerts while the app is closed: {on, server, key}
                 "alerts" -> {
                     val a = call.arguments as? Map<*, *>
