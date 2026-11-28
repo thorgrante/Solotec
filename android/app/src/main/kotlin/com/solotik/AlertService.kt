@@ -26,7 +26,7 @@ class AlertService : Service() {
     companion object {
         const val PREFS = "hv-alerts"
         private const val WATCH = "hv-watch"
-        private const val TICKETS = "hv-tickets-tune"
+        private const val TICKETS = "hv-tickets-tune-2" // new name: an earlier build made the channel without the tune file
         @Volatile var foreground = false // the app is on screen: it shows the alert itself
         @Volatile private var running = false
 
@@ -67,6 +67,7 @@ class AlertService : Service() {
     private fun channels() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+        try { nm.deleteNotificationChannel("hv-tickets-tune") } catch (_: Exception) {}
         nm.createNotificationChannel(NotificationChannel(WATCH, "Watching for tickets", NotificationManager.IMPORTANCE_MIN).apply {
             description = "Keeps ticket alerts working while the app is closed"; setShowBadge(false) })
         nm.createNotificationChannel(NotificationChannel(TICKETS, "Tickets and routers", NotificationManager.IMPORTANCE_HIGH).apply {

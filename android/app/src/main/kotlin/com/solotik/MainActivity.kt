@@ -172,7 +172,17 @@ class MainActivity : FlutterActivity() {
         } catch (_: Exception) {}
     }
 
-    override fun onResume() { super.onResume(); AlertService.foreground = true }
+    override fun onResume() { super.onResume(); AlertService.foreground = true; askNotifications() }
+
+    // Android 13 and later: the app must ask before it may show any notification (once; after that, the phone's settings)
+    private fun askNotifications() {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val p = getSharedPreferences(AlertService.PREFS, Context.MODE_PRIVATE)
+        if (p.getInt("askedNotify", 0) >= 2) return
+        p.edit().putInt("askedNotify", p.getInt("askedNotify", 0) + 1).apply()
+        requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7)
+    }
     override fun onPause() { AlertService.foreground = false; super.onPause() }
 
     override fun onDestroy() {

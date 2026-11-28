@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The alert tune is only named in code (android.resource://.../raw/solotik): keep it in the release build. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/solotik" />

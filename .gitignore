@@ -17,6 +17,9 @@ pubspec.lock
 /android/app/src/main/*
 !/android/app/src/main/AndroidManifest.xml
 !/android/app/src/main/kotlin/
+!/android/app/src/main/res/
+/android/app/src/main/res/*
+!/android/app/src/main/res/raw/
 /windows/
 /test/
 windows-installer/Output/
