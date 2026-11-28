@@ -30,6 +30,25 @@ class AlertService : Service() {
         @Volatile var foreground = false // the app is on screen: it shows the alert itself
         @Volatile private var running = false
 
+        // For the app's "Pop-ups on this phone" line: is the watcher on, when did it last reach the server, may it show pop-ups
+        fun status(c: Context): Map<String, Any> {
+            val p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            var allowed = if (Build.VERSION.SDK_INT >= 24) nm.areNotificationsEnabled() else true
+            if (allowed && Build.VERSION.SDK_INT >= 26) { val ch = nm.getNotificationChannel(TICKETS); if (ch != null && ch.importance == NotificationManager.IMPORTANCE_NONE) allowed = false }
+            val sound = if (Build.VERSION.SDK_INT >= 26) nm.getNotificationChannel(TICKETS)?.sound != null else true
+            val battery = if (Build.VERSION.SDK_INT >= 23) (c.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(c.packageName) else true
+            return mapOf("on" to p.getBoolean("on", false), "running" to running, "lastPoll" to p.getLong("lastPoll", 0), "lastError" to (p.getString("lastError", "") ?: ""),
+                "allowed" to allowed, "sound" to sound, "battery" to battery)
+        }
+
+        // The phone's notification settings for this app (to allow pop-ups or turn their sound on)
+        fun settings(c: Context) {
+            val i = if (Build.VERSION.SDK_INT >= 26) Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, c.packageName)
+                else Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + c.packageName))
+            c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+
         fun start(c: Context, server: String, key: String) {
             c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean("on", true).putString("server", server.trimEnd('/')).putString("key", key).apply()
@@ -82,7 +101,8 @@ class AlertService : Service() {
     private fun loop() {
         val p = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         while (running && p.getBoolean("on", false)) {
-            try { poll(p) } catch (_: Exception) { /* no internet just now: next turn */ }
+            try { poll(p); p.edit().putLong("lastPoll", System.currentTimeMillis()).putString("lastError", "").apply() }
+            catch (e: Exception) { p.edit().putString("lastError", e.message ?: e.javaClass.simpleName).apply() /* no internet just now: next turn */ }
             try { Thread.sleep(15000) } catch (_: InterruptedException) { break }
         }
         running = false
@@ -97,13 +117,13 @@ class AlertService : Service() {
         c.connectTimeout = 10000; c.readTimeout = 15000; c.setRequestProperty("X-Alert-Key", key); c.setRequestProperty("Accept", "application/json")
         try {
             if (c.responseCode == 401) { p.edit().putBoolean("on", false).apply(); return } // the key was withdrawn
-            if (c.responseCode != 200) return
+            if (c.responseCode != 200) throw Exception("server answered " + c.responseCode)
             val j = JSONObject(c.inputStream.bufferedReader().readText())
             val ev = j.optJSONArray("events")
             var top = j.optLong("last", 0)
             if (ev != null) for (i in 0 until ev.length()) {
                 val e = ev.getJSONObject(i); val id = e.optLong("id")
-                if (!foreground) show(id, e.optString("title"), e.optString("body"))
+                if (!foreground || e.optString("kind") == "test") show(id, e.optString("title"), e.optString("body"))
                 if (i == ev.length() - 1 && ev.length() >= 50) top = id // more to come
             }
             p.edit().putLong("after", top).apply()

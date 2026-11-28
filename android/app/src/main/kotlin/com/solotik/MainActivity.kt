@@ -138,6 +138,8 @@ class MainActivity : FlutterActivity() {
                         } catch (e: Exception) { ui.post { result.success(false) } }
                     }
                 }
+                "alertsStatus" -> { try { result.success(AlertService.status(applicationContext)) } catch (e: Exception) { result.error("alerts", e.message, null) } }
+                "alertsSettings" -> { try { AlertService.settings(this); result.success(true) } catch (e: Exception) { result.error("alerts", e.message, null) } }
                 // Ticket alerts while the app is closed: {on, server, key}
                 "alerts" -> {
                     val a = call.arguments as? Map<*, *>

@@ -70,6 +70,13 @@ document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e
           if (!Platform.isAndroid) return {'ok': false};
           await const MethodChannel('hv/native').invokeMethod('alerts', {'on': a['on'] == true, 'server': '${a['server'] ?? server}', 'key': '${a['key'] ?? ''}'});
           return {'ok': true};
+        case 'alertsStatus': // is the watcher on, last time it reached the server, may it show pop-ups (Android)
+          if (!Platform.isAndroid) return {'on': false};
+          final st = await const MethodChannel('hv/native').invokeMethod('alertsStatus');
+          return Map<String, dynamic>.from(st as Map);
+        case 'alertsSettings': // the phone's notification settings for Solotik (Android)
+          if (Platform.isAndroid) await const MethodChannel('hv/native').invokeMethod('alertsSettings');
+          return {'ok': true};
         case 'saveFile':
           return await _saveFile('${a['name'] ?? 'download'}', '${a['mime'] ?? 'application/octet-stream'}', '${a['data'] ?? ''}');
       }
